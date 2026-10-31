@@ -21,16 +21,17 @@ input,select{font-size:16px;padding:9px;border:1px solid #bcd;border-radius:8px;
 .list li{margin:4px 0}ol.route li{margin-bottom:8px}.src{font-size:11px;color:#678;word-break:break-all}
 table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #e3e9f0;padding:5px;text-align:left}
 .big{font-size:22px;font-weight:700;color:#0a5fae}.note{font-size:12px;color:#7a5b00;background:#fff6dc;padding:6px 8px;border-radius:6px}
-#panel{position:absolute;left:8px;top:8px;max-width:62%;max-height:70%;overflow:auto;background:rgba(255,255,255,.95);border-radius:10px;padding:8px;font-size:12px;display:none}
+#panel{position:absolute;left:8px;top:8px;max-width:64%;z-index:3;max-height:70%;overflow:auto;background:rgba(255,255,255,.95);border-radius:10px;padding:8px;font-size:12px;display:none}
 #panel b{font-size:14px}
 </style>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 </head><body>
 <header><h1>🗻 御殿場 Premium Outlets 3D 逛街小幫手</h1><p>全家 11/2–11/8 東京自由行・資料取自官網（2026/10/31 查詢）</p></header>
 <div id="wrap"><canvas id="c"></canvas><div id="tag"></div>
-<div id="legend"><span class="dot" style="background:#2f7dd1"></span>West Zone<br><span class="dot" style="background:#e08a1e"></span>East Zone<br><span class="dot" style="background:#2e9e6a"></span>Hill Side<br>🚻 廁所/授乳 🛝 遊樂 ℹ️ 服務</div>
+<div id="legend"><span class="dot" style="background:#8e44ad"></span>精品 <span class="dot" style="background:#2e9e4f"></span>運動戶外<br><span class="dot" style="background:#f39c12"></span>童裝玩具 <span class="dot" style="background:#16a085"></span>生活家居<br><span class="dot" style="background:#e74c3c"></span>美食 <span class="dot" style="background:#5d7286"></span>服飾/其他<br><button class="btn" id="walkBtn" onclick="toggleWalk()" style="margin-top:4px;width:100%">🚶 步行視角</button></div>
+<div id="walkBar" style="display:none;position:absolute;left:50%;bottom:36px;transform:translateX(-50%);gap:6px;white-space:nowrap;align-items:center;background:rgba(255,255,255,.9);padding:5px 7px;border-radius:20px"><button class="btn g" ontouchstart="walkSpeed(-1)" onmousedown="walkSpeed(-1)" onmouseup="walkSpeed(0)" ontouchend="walkSpeed(0)">◀ 後退</button><button class="btn" ontouchstart="walkSpeed(1)" onmousedown="walkSpeed(1)" onmouseup="walkSpeed(0)" ontouchend="walkSpeed(0)">前進 ▶</button><button class="btn g" onclick="walkZone()">換區：<span id="walkZone"></span></button></div>
 <div id="panel"></div>
-<div id="hint">單指旋轉・雙指縮放・點建物看店家（示意配置）</div></div>
+<div id="hint">示意圖，實際位置以官網樓層圖為準・點店面看店家・拉近看招牌</div></div>
 <nav id="nav"><button data-t="s" class="on">🔍 找品牌</button><button data-t="r">👨‍👩‍👧‍👦 親子路線</button><button data-t="l">✅ 購物清單</button><button data-t="x">💱 換匯</button><button data-t="i">🚌 交通/資訊</button></nav>
 <section id="s" class="on"><div class="card">
 <input id="q" placeholder="輸入品牌（英文/日文），如 Nike、Coach、ポケモン">
@@ -59,32 +60,114 @@ const S=window.SHOPS,$=s=>document.querySelector(s);
 const ZN={W:'West Zone',E:'East Zone',H:'Hill Side','?':'區域依官網為準'};
 const CAT={lux:'精品',sport:'運動戶外',kids:'童裝玩具',home:'生活家居',food:'美食'};
 // ---- 3D ----
+const LABELS=[];
 const cv=$('#c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));
-const sc=new THREE.Scene();sc.background=new THREE.Color(0xbfe0f7);sc.fog=new THREE.Fog(0xbfe0f7,350,900);
-const cam=new THREE.PerspectiveCamera(50,1,1,2000);cam.position.set(10,95,215);
-const ctl=new OrbitControls(cam,cv);ctl.enableDamping=true;ctl.maxPolarAngle=1.45;ctl.minDistance=30;ctl.maxDistance=380;ctl.target.set(0,10,-30);
-sc.add(new THREE.HemisphereLight(0xffffff,0x88aa77,1.1));const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(80,150,60);sc.add(dl);
-const gnd=new THREE.Mesh(new THREE.CircleGeometry(600,48),new THREE.MeshLambertMaterial({color:0x9ccc7a}));gnd.rotation.x=-Math.PI/2;sc.add(gnd);
-// Fuji (北西方向背景)
-const fuji=new THREE.Group();const m1=new THREE.Mesh(new THREE.ConeGeometry(170,150,64,1,true),new THREE.MeshLambertMaterial({color:0x5b6f96}));m1.position.y=75;fuji.add(m1);
-const m2=new THREE.Mesh(new THREE.ConeGeometry(62,55,64),new THREE.MeshLambertMaterial({color:0xffffff}));m2.position.y=123;fuji.add(m2);fuji.position.set(-90,0,-300);sc.add(fuji);
-function label(t,c='#123',sz=40){const k=document.createElement('canvas');k.width=512;k.height=96;const x=k.getContext('2d');x.font=`bold ${sz}px sans-serif`;x.textAlign='center';x.fillStyle='rgba(255,255,255,.85)';x.fillRect(0,14,512,68);x.fillStyle=c;x.fillText(t,256,62);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(k),depthTest:false}));s.scale.set(56,10.5,1);return s}
-const fl=label('富士山 Mt. Fuji','#334',44);fl.position.set(-90,165,-300);fl.scale.set(80,15,1);sc.add(fl);
-// 區塊 (示意): West 中央, East 東北(經夢之大橋), Hill Side 南
-const ZD={W:{c:[-30,10],w:70,d:60,col:0x2f7dd1},E:{c:[70,-35],w:80,d:60,col:0xe08a1e},H:{c:[0,85],w:80,d:45,col:0x2e9e6a}};
-const pick=[],shopPos={};
-for(const z in ZD){const o=ZD[z];const base=new THREE.Mesh(new THREE.BoxGeometry(o.w,1,o.d),new THREE.MeshLambertMaterial({color:0xf3efe6}));base.position.set(o.c[0],.5,o.c[1]);sc.add(base);
- const list=S.filter(s=>s.z===z).sort((a,b)=>(parseInt(a.k)||9999)-(parseInt(b.k)||9999));
- const cols=Math.ceil(Math.sqrt(list.length*o.w/o.d)),rows=Math.ceil(list.length/cols),cw=o.w/cols,cd=o.d/rows;
- list.forEach((s,i)=>{const cx=i%cols,cz=Math.floor(i/cols);const h=4+((parseInt(s.k)||7)%5);
-  const b=new THREE.Mesh(new THREE.BoxGeometry(cw*.8,h,cd*.75),new THREE.MeshLambertMaterial({color:o.col}));
-  b.position.set(o.c[0]-o.w/2+cw*(cx+.5),1+h/2,o.c[1]-o.d/2+cd*(cz+.5));b.userData={zone:z,shop:s};sc.add(b);pick.push(b);shopPos[s.n]={p:b.position.clone(),m:b}});
- const L=label(ZN[z],'#'+o.col.toString(16).padStart(6,'0'));L.position.set(o.c[0],22,o.c[1]);sc.add(L);}
-function icon(e){const k=document.createElement('canvas');k.width=k.height=96;const x=k.getContext('2d');x.fillStyle='#fff';x.beginPath();x.arc(48,48,44,0,7);x.fill();x.strokeStyle='#e5484d';x.lineWidth=6;x.stroke();x.font='56px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(e,48,52);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(k),depthTest:false}));s.scale.set(9,9,1);return s}
-function bridge(a,b,name){const v=new THREE.Vector3(b[0]-a[0],0,b[1]-a[1]);const len=v.length();const m=new THREE.Mesh(new THREE.BoxGeometry(5,1.5,len),new THREE.MeshLambertMaterial({color:0xd9d2c3}));m.position.set((a[0]+b[0])/2,4,(a[1]+b[1])/2);m.rotation.y=Math.atan2(v.x,v.z);sc.add(m);const l=label(name,'#7a4b00',36);l.position.set((a[0]+b[0])/2,12,(a[1]+b[1])/2);l.scale.set(30,5.6,1);sc.add(l)}
-bridge([5,-12],[30,-25],'夢之大橋（夢の大橋）');bridge([-10,40],[-5,62],'往 Hill Side 的步道橋');
+R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.outputColorSpace=THREE.SRGBColorSpace;
+const sc=new THREE.Scene();sc.background=new THREE.Color(0xaed6f1);sc.fog=new THREE.Fog(0xaed6f1,320,900);
+const cam=new THREE.PerspectiveCamera(50,1,0.5,2500);cam.position.set(40,150,230);
+const ctl=new OrbitControls(cam,cv);ctl.enableDamping=true;ctl.maxPolarAngle=1.5;ctl.minDistance=8;ctl.maxDistance=420;ctl.target.set(0,0,10);
+sc.add(new THREE.HemisphereLight(0xdff1ff,0x5d7a3a,0.9));
+const sun=new THREE.DirectionalLight(0xfff1d6,2.2);sun.position.set(140,160,90);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-180,right:180,top:180,bottom:-180,near:10,far:500});sun.shadow.bias=-0.0008;sc.add(sun);
+// 地形：West/East 平地、Hill Side 高台、West 與 Hill Side 之間為山谷（示意）
+const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
+function H(x,z){let h=0;h+=9*ss(70,55,Math.hypot(x+5,z-100));const d=Math.abs((z-52)+0.15*(x+40));h-=7*ss(14,4,d)*ss(160,60,Math.hypot(x+40,z-52));
+ h+=1.2*Math.sin(x*.03)*Math.cos(z*.025)+18*ss(260,420,Math.hypot(x,z));return h}
+const tg=new THREE.PlaneGeometry(900,900,150,150);tg.rotateX(-Math.PI/2);const tp=tg.attributes.position,tcol=[];
+for(let i=0;i<tp.count;i++){const x=tp.getX(i),z=tp.getZ(i),h=H(x,z);tp.setY(i,h);const c=new THREE.Color(h<-3?0x6f8f5a:0x7fae5c).offsetHSL(0,0,(Math.sin(x*.7)*Math.cos(z*.9))*.03);tcol.push(c.r,c.g,c.b)}
+tg.setAttribute('color',new THREE.Float32BufferAttribute(tcol,3));tg.computeVertexNormals();
+const terr=new THREE.Mesh(tg,new THREE.MeshLambertMaterial({vertexColors:true}));terr.receiveShadow=true;sc.add(terr);
+// 山谷小溪
+{const pts=[];for(let x=-160;x<=120;x+=10){const z=52-0.15*(x+40);pts.push(new THREE.Vector3(x,H(x,z)+0.3,z))}
+ const g=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),60,1.6,6);g.scale(1,0.15,1);const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0x4a90c2}));sc.add(m)}
+// 富士山（實際位於園區西北方）
+const fuji=new THREE.Group();{const g=new THREE.ConeGeometry(260,230,96,8,true);const p=g.attributes.position,c=[];
+ for(let i=0;i<p.count;i++){const y=p.getY(i);const r=Math.hypot(p.getX(i),p.getZ(i));p.setX(i,p.getX(i)*(1+0.04*Math.sin(i)));const s=y>45;const col=new THREE.Color(s?0xf7fbff:0x4c5f86);if(!s&&y>20)col.lerp(new THREE.Color(0xeaf2ff),(y-20)/25);c.push(col.r,col.g,col.b)}
+ g.setAttribute('color',new THREE.Float32BufferAttribute(c,3));g.computeVertexNormals();const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true,fog:false}));m.position.y=115;fuji.add(m)}
+fuji.position.set(-330,0,-560);sc.add(fuji);
+function label(t,c='#123',sz=40){const k=document.createElement('canvas');k.width=512;k.height=96;const x=k.getContext('2d');x.font=`bold ${sz}px sans-serif`;x.textAlign='center';x.fillStyle='rgba(255,255,255,.88)';x.fillRect(0,14,512,68);x.fillStyle=c;x.fillText(t,256,62);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(k),depthTest:false}));s.scale.set(56,10.5,1);s.renderOrder=5;LABELS.push(s);return s}
+{const fl=label('富士山（西北方）','#334',44);fl.position.set(-330,280,-560);fl.scale.set(110,20,1);fl.material.fog=false;sc.add(fl)}
+function icon(e){const k=document.createElement('canvas');k.width=k.height=96;const x=k.getContext('2d');x.fillStyle='#fff';x.beginPath();x.arc(48,48,44,0,7);x.fill();x.strokeStyle='#e5484d';x.lineWidth=6;x.stroke();x.font='56px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(e,48,52);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(k),depthTest:false}));s.scale.set(7,7,1);s.renderOrder=6;return s}
+// 步道（依樓層圖動線示意）
+const V=(x,z)=>new THREE.Vector3(x,H(x,z),z);
+const PATH={
+ W:[[-112,28],[-100,-2],[-80,-24],[-52,-30],[-30,-18],[-26,8],[-40,26],[-70,34]],
+ E:[[10,-44],[38,-58],[68,-80],[102,-72],[122,-46],[104,-24],[74,-28],[48,-36]],
+ H:[[-48,82],[-20,70],[16,76],[42,96],[30,122],[-4,130],[-36,114]],
+ Q:[[-128,48],[-108,58]]};
+const ZONECOL={W:0x2f7dd1,E:0xe08a1e,H:0x2e9e6a,Q:0x888888};
+const curves={},pathMat=new THREE.MeshLambertMaterial({color:0xd8cbb0});
+function ribbon(curve,w,yo=0.12){const n=200,pos=[],idx=[];for(let i=0;i<=n;i++){const t=i/n,p=curve.getPointAt(t),tn=curve.getTangentAt(t);const nx=tn.z,nz=-tn.x,l=Math.hypot(nx,nz)||1;
+ for(const s of[-1,1]){const x=p.x+nx/l*w*s,z=p.z+nz/l*w*s;pos.push(x,Math.max(H(x,z),p.y)+yo,z)}if(i<n){const a=i*2;idx.push(a,a+1,a+2,a+1,a+3,a+2)}}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();const m=new THREE.Mesh(g,pathMat);m.receiveShadow=true;sc.add(m);return m}
+for(const z in PATH){curves[z]=new THREE.CatmullRomCurve3(PATH[z].map(p=>V(p[0],p[1])),false,'centripetal');ribbon(curves[z],3.2)}
+// 橋：夢之大橋（West→East）、往 Hill Side 的步道橋（跨山谷）
+function bridge(a,b,name,arch){const A=V(...a),B=V(...b),M=A.clone().lerp(B,.5);M.y=Math.max(A.y,B.y)+arch;const c=new THREE.QuadraticBezierCurve3(A.clone().setY(A.y+.3),M,B.clone().setY(B.y+.3));
+ const n=40,pos=[],idx=[];for(let i=0;i<=n;i++){const p=c.getPoint(i/n),t=c.getTangent(i/n),nx=t.z,nz=-t.x,l=Math.hypot(nx,nz);for(const s of[-1,1])pos.push(p.x+nx/l*2.6*s,p.y,p.z+nz/l*2.6*s);if(i<n){const k=i*2;idx.push(k,k+1,k+2,k+1,k+3,k+2)}}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb8b2a6,side:2,roughness:.8}));m.castShadow=true;sc.add(m);
+ const rail=new THREE.MeshLambertMaterial({color:0x8a6a4a});for(const s of[-1,1]){const pts=[];for(let i=0;i<=n;i++){const p=c.getPoint(i/n),t=c.getTangent(i/n),nx=t.z,nz=-t.x,l=Math.hypot(nx,nz);pts.push(new THREE.Vector3(p.x+nx/l*2.6*s,p.y+1,p.z+nz/l*2.6*s))}sc.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,.12,4),rail))}
+ for(let i=1;i<6;i++){const p=c.getPoint(i/6);const h=p.y-H(p.x,p.z);if(h>1){const pl=new THREE.Mesh(new THREE.CylinderGeometry(.5,.7,h,6),rail);pl.position.set(p.x,p.y-h/2,p.z);pl.castShadow=true;sc.add(pl)}}
+ const l=label(name,'#7a4b00',34);const p=c.getPoint(.5);l.position.set(p.x,p.y+9,p.z);l.scale.set(40,7.5,1);sc.add(l);return c}
+const bWE=bridge([-30,-18],[10,-44],'夢之大橋（夢の大橋）',5);const bWH=bridge([-40,26],[-48,82],'往 Hill Side 的步道橋（跨山谷）',4);
+// 停車場（官網：P2 West、P5/P7 East、P4 Hill Side）
+function lot(x,z,w,d,name){const y=H(x,z)+.15;const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshLambertMaterial({color:0x7d8188}));m.rotation.x=-Math.PI/2;m.position.set(x,y,z);m.receiveShadow=true;sc.add(m);
+ const lines=new THREE.InstancedMesh(new THREE.PlaneGeometry(.25,4),new THREE.MeshBasicMaterial({color:0xffffff}),Math.floor(w/3)*2);const o=new THREE.Object3D();let k=0;for(let r of[-d/4,d/4])for(let i=0;i<Math.floor(w/3);i++){o.position.set(x-w/2+1.5+i*3,y+.05,z+r);o.rotation.set(-Math.PI/2,0,0);o.updateMatrix();lines.setMatrixAt(k++,o.matrix)}sc.add(lines);
+ const l=label(name,'#334',36);l.position.set(x,y+8,z);l.scale.set(26,5,1);sc.add(l)}
+lot(-95,-55,36,24,'P2 停車場');lot(140,-90,34,26,'P5 停車場');lot(110,10,30,22,'P7 停車場');lot(60,100,34,26,'P4 立體停車場（木之花之湯方向）');
+// ---- 攤位 / 店面 ----
+const CC={lux:'#8e44ad',sport:'#2e9e4f',kids:'#f39c12',home:'#16a085',food:'#e74c3c',other:'#5d7286'};
+const CN={lux:'精品',sport:'運動戶外',kids:'童裝玩具',home:'生活家居',food:'美食',other:'服飾/其他'};
+const order=['W','E','H','?'];const groups={W:[],E:[],H:[],'?':[]};S.forEach(s=>groups[s.z].push(s));
+const num=k=>{const m=String(k).match(/\d+/);return m?parseInt(m[0]):99999};for(const z in groups)groups[z].sort((a,b)=>num(a.k)-num(b.k)||a.k.localeCompare(b.k));
+const ALL=[];order.forEach(z=>groups[z].forEach(s=>ALL.push(s)));const N=ALL.length;
+// 招牌 texture atlas：每格 256x64
+const AC=8,AW=256,AH=64,AR=Math.ceil(N/AC);const at=document.createElement('canvas');at.width=AC*AW;at.height=2048;const ax=at.getContext('2d');
+ALL.forEach((s,i)=>{const x0=(i%AC)*AW,y0=Math.floor(i/AC)*AH;const g=s.g[0];ax.fillStyle='#fffaf0';ax.fillRect(x0,y0,AW,AH);ax.fillStyle=CC[g];ax.fillRect(x0,y0,AW,9);ax.fillRect(x0,y0+AH-5,AW,5);
+ ax.strokeStyle='#3b2a1a';ax.lineWidth=3;ax.strokeRect(x0+1.5,y0+1.5,AW-3,AH-3);let fs=30;const nm=s.n.replace(/[（(].*$/,'').trim()||s.n;ax.font=`bold ${fs}px Arial,sans-serif`;while(ax.measureText(nm).width>AW-14&&fs>13){fs--;ax.font=`bold ${fs}px Arial,sans-serif`}
+ ax.fillStyle='#1b1b1b';ax.textAlign='center';ax.textBaseline='middle';ax.fillText(nm,x0+AW/2,y0+33+(fs<20?-2:0));if(fs<20){}ax.font='bold 11px sans-serif';ax.fillStyle=CC[g];ax.fillText(CN[g]+'・'+s.k,x0+AW/2,y0+AH-14)});
+const atlas=new THREE.CanvasTexture(at);atlas.colorSpace=THREE.SRGBColorSpace;atlas.anisotropy=R.capabilities.getMaxAnisotropy();atlas.generateMipmaps=true;
+const W_=3.6,D_=4.2,HH=3.4;
+const wallG=new THREE.BoxGeometry(W_,HH,D_);wallG.translate(0,HH/2,0);
+const roofG=new THREE.CylinderGeometry(0,1,1,4,1);roofG.rotateY(Math.PI/4);roofG.scale(W_*0.78,2.2,D_*0.78);roofG.translate(0,HH+1.1,0); // 尖屋頂
+const awnG=new THREE.BoxGeometry(W_*0.98,.18,1.5);awnG.rotateX(.35);awnG.translate(0,HH-1.3,D_/2+.7); // 遮棚
+const postG=new THREE.CylinderGeometry(.09,.09,HH-.7,5);const postG2=postG.clone();postG.translate(-W_*0.45,(HH-.7)/2-.35,D_/2+1.35);postG2.translate(W_*0.45,(HH-.7)/2-.35,D_/2+1.35); // 拱廊柱
+const trimG=new THREE.BoxGeometry(W_*1.02,.25,D_*1.02);trimG.translate(0,HH,0);
+function IM(g,m,cast=true){const im=new THREE.InstancedMesh(g,m,N);im.castShadow=cast;im.receiveShadow=true;sc.add(im);return im}
+const walls=IM(wallG,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.9}));
+const roofs=IM(roofG,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.8,flatShading:true}));
+const awns=IM(awnG,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.7}));
+const trims=IM(trimG,new THREE.MeshStandardMaterial({color:0x8b5a2b,roughness:.9}),false);
+const p1=IM(postG,new THREE.MeshLambertMaterial({color:0xf4f1ea}),false),p2=IM(postG2,new THREE.MeshLambertMaterial({color:0xf4f1ea}),false);
+const ROOFC=[0x3f5268,0x6b4a3a,0x2f5d50,0x7a3b32,0x4a4a58];
+const shopPos={},stall=[],signPos=[],signUV=[],signIdx=[];const o=new THREE.Object3D(),tmpC=new THREE.Color();
+let gi=0;
+order.forEach(z=>{const list=groups[z];if(!list.length)return;const cu=curves[z==='?'?'Q':z];const per=Math.ceil(list.length/2);
+ list.forEach((s,j)=>{const side=j<per?1:-1;const k=j<per?j:j-per;const t=(k+.5)/per;const p=cu.getPointAt(t),tn=cu.getTangentAt(t);const n=new THREE.Vector3(tn.z,0,-tn.x).normalize();
+  const c=p.clone().addScaledVector(n,side*(3.2+D_/2+1.4));c.y=H(c.x,c.z);if(c.y<p.y-1)c.y=p.y-1; // 店面面向步道
+  const front=n.clone().multiplyScalar(-side);const ry=Math.atan2(front.x,front.z);
+  o.position.copy(c);o.rotation.set(0,ry,0);o.scale.set(1,1,1);o.updateMatrix();[walls,roofs,awns,trims,p1,p2].forEach(m=>m.setMatrixAt(gi,o.matrix));
+  // 地基（避免坡地懸空）
+  walls.setColorAt(gi,tmpC.set(0xf7f3ea).offsetHSL(0,0,(gi%3)*-.03));roofs.setColorAt(gi,tmpC.set(ROOFC[num(s.k)%5]));awns.setColorAt(gi,tmpC.set(CC[s.g[0]]));
+  // 招牌：正面上方
+  const sw=W_*1.0,sh=sw*AH/AW*1.15;const sc0=c.clone().addScaledVector(front,D_/2+.04);sc0.y+=HH-.2;const rgt=new THREE.Vector3(front.z,0,-front.x);
+  const base=signPos.length/3;for(const[a,b]of[[-1,-1],[1,-1],[1,1],[-1,1]]){const v=sc0.clone().addScaledVector(rgt,a*sw/2);v.y+=b*sh/2;signPos.push(v.x,v.y,v.z)}
+  const u0=(gi%AC)*AW/at.width,u1=u0+AW/at.width,v1=1-Math.floor(gi/AC)*AH/at.height,v0=v1-AH/at.height;signUV.push(u0,v0,u1,v0,u1,v1,u0,v1);signIdx.push(base,base+1,base+2,base,base+2,base+3);
+  shopPos[s.n]={p:c.clone().setY(c.y+2),i:gi,front,sc:sc0,uv:[u0,v0,u1,v1],rgt};stall.push(s);gi++})});
+[walls,roofs,awns].forEach(m=>{m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true});
+const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.Float32BufferAttribute(signPos,3));sg.setAttribute('uv',new THREE.Float32BufferAttribute(signUV,2));sg.setIndex(signIdx);sg.computeVertexNormals();
+const signs=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({map:atlas,side:THREE.FrontSide,toneMapped:false}));sc.add(signs);
+// 區域地名
+const ZN2={W:'West Zone',E:'East Zone',H:'Hill Side',Q:'區域未標示（依官網為準）'};
+for(const z in curves){const p=curves[z].getPointAt(.5);const l=label(ZN2[z],'#'+ZONECOL[z].toString(16).padStart(6,'0'),z==='Q'?30:42);l.position.set(p.x,p.y+26,p.z);if(z==='Q')l.scale.set(40,7.5,1);sc.add(l)}
+// 樹木（InstancedMesh）
+{const TN=520,tr=new THREE.InstancedMesh(new THREE.CylinderGeometry(.25,.35,2,5).translate(0,1,0),new THREE.MeshLambertMaterial({color:0x6b4a2b}),TN),
+ lf=new THREE.InstancedMesh(new THREE.ConeGeometry(2,5.5,7).translate(0,4.5,0),new THREE.MeshLambertMaterial({color:0xffffff}),TN);lf.castShadow=true;
+ const near=(x,z)=>{for(const k in curves){const c=curves[k];for(let t=0;t<=1;t+=.02){const p=c.getPointAt(t);if(Math.hypot(p.x-x,p.z-z)<17)return true}}return false};
+ let k=0,seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;let guard=0;
+ while(k<TN&&guard++<8000){const x=rnd()*400-200,z=rnd()*340-150;if(near(x,z))continue;const y=H(x,z),s=.7+rnd()*.9;o.position.set(x,y,z);o.rotation.set(0,rnd()*6,0);o.scale.set(s,s,s);o.updateMatrix();tr.setMatrixAt(k,o.matrix);lf.setMatrixAt(k,o.matrix);lf.setColorAt(k,tmpC.setHSL(.28+rnd()*.08,.45,.25+rnd()*.12));k++}
+ tr.count=lf.count=k;sc.add(tr,lf)}
 // 設施標記
-const FAC=[
+const ICONS=[];const FAC=[
  {i:'ℹ️',t:'資訊中心（Tory Burch 旁）：輪椅、走失協尋、救護室、外幣兌換、充電',z:'W',near:'Tory Burch'},
  {i:'🍼',t:'授乳室（Bottega Veneta 旁）・附熱水與微波爐',z:'W',near:'Bottega Veneta'},
  {i:'🍼',t:'mamaro 嬰兒照護室（Tag Heuer 旁通道）',z:'W',near:'Tag Heuer'},
@@ -97,21 +180,53 @@ const FAC=[
  {i:'🎡',t:'HILL SIDE PLAYGROUND 迷你遊樂園（收費，詳見官網特設頁）',z:'H',near:'Tully\'s Coffee & Tea (Hill Side)'},
  {i:'🛋️',t:'迎賓中心 Welcome Center（Hill Side 巴士總站前）：休息室、可充電、輪椅、外幣兌換',z:'H',near:'Seiko'},
  {i:'♨️',t:'木之花之湯（Hill Side，P4 立體停車場頂樓過去）',z:'H',near:'Hot spring facility Konohana no Yu'}];
-FAC.forEach(f=>{const sp=shopPos[f.near];if(!sp)return;const l=icon(f.i);l.position.copy(sp.p).add(new THREE.Vector3(0,13,0));sc.add(l);f.pos=sp.p});
+FAC.forEach(f=>{const sp=shopPos[f.near];if(!sp)return;const l=icon(f.i);ICONS.push(l);l.position.copy(sp.p).add(new THREE.Vector3(0,7,0));sc.add(l);f.pos=sp.p});
 function resize(){const w=cv.clientWidth,h=cv.clientHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}addEventListener('resize',resize);resize();
-let fly=null,hl=null;const tag=$('#tag');
-function flyTo(p,name){const tgt=p.clone();const off=new THREE.Vector3(25,45,55);fly={t0:performance.now(),fp:cam.position.clone(),ft:ctl.target.clone(),tp:tgt.clone().add(off),tt:tgt};
- if(hl){hl.m.material.emissive.setHex(0);hl.m.scale.set(1,1,1)}const sp=shopPos[name];if(sp){sp.m.material=sp.m.material.clone();sp.m.material.emissive.setHex(0xff2222);sp.m.scale.set(1.3,1.8,1.3);hl=sp}
- tag.textContent='📍 '+name;tag.dataset.n=name;tag.style.display='block';document.getElementById('wrap').scrollIntoView({behavior:'smooth'})}
-window.flyShop=n=>{const sp=shopPos[n];if(sp)flyTo(sp.p,n);else alert('這家店的區域官網未標示，請以官網樓層圖為準')};
-window.flyFac=i=>{const f=FAC[i];if(f.pos)flyTo(f.pos,f.t.split('（')[0])};
+// ---- 發亮招牌 ----
+const glowMat=new THREE.MeshBasicMaterial({map:atlas.clone(),toneMapped:false,color:0xffffff});glowMat.map.needsUpdate=true;
+const glow=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat);glow.visible=false;glow.renderOrder=4;sc.add(glow);
+const haloK=document.createElement('canvas');haloK.width=haloK.height=128;{const x=haloK.getContext('2d');const g=x.createRadialGradient(64,64,4,64,64,64);g.addColorStop(0,'rgba(255,240,120,1)');g.addColorStop(1,'rgba(255,200,0,0)');x.fillStyle=g;x.fillRect(0,0,128,128)}
+const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(haloK),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));halo.visible=false;sc.add(halo);
+let hlI=-1;
+function highlight(name){const sp=shopPos[name];if(hlI>=0)awns.setColorAt(hlI,tmpC.set(CC[stall[hlI].g[0]]));if(!sp){glow.visible=halo.visible=false;return}
+ hlI=sp.i;awns.setColorAt(hlI,tmpC.set(0xffe14d));awns.instanceColor.needsUpdate=true;
+ const[u0,v0,u1,v1]=sp.uv;glowMat.map.offset.set(u0,v0);glowMat.map.repeat.set(u1-u0,v1-v0);const sw=W_*1.25;glow.scale.set(sw,sw*AH/AW*1.15,1);
+ glow.position.copy(sp.sc).addScaledVector(sp.front,.25);glow.position.y+=.25;glow.lookAt(glow.position.clone().add(sp.front));glow.visible=true;
+ halo.position.copy(sp.sc).addScaledVector(sp.front,-.6);halo.scale.set(8,3.5,1);halo.visible=true}
+let fly=null,walking=false;const tag=$('#tag');
+function flyTo(p,name,front){const tgt=p.clone();const sp0=shopPos[name];const off=front?front.clone().multiplyScalar(8).add(sp0.rgt.clone().multiplyScalar(-6)).add(new THREE.Vector3(0,2.6,0)):new THREE.Vector3(14,18,22);stopWalk();
+ fly={t0:performance.now(),fp:cam.position.clone(),ft:ctl.target.clone(),tp:tgt.clone().add(off),tt:tgt};highlight(name);
+ tag.textContent='📍 '+name;tag.dataset.n=name;tag.style.display=shopPos[name]?'block':'none';document.getElementById('wrap').scrollIntoView({behavior:'smooth'})}
+window.flyShop=n=>{const sp=shopPos[n];if(sp){flyTo(sp.p,n,sp.front);showShop(stall[sp.i])}};
+window.flyFac=i=>{const f=FAC[i];const sp=shopPos[f.near];if(sp){flyTo(sp.p,f.near,sp.front);showShop(stall[sp.i],f.t)}};
+// ---- 點擊店面 ----
 const ray=new THREE.Raycaster(),mv=new THREE.Vector2();let down;
 cv.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);
-cv.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;const r=cv.getBoundingClientRect();mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,cam);const h=ray.intersectObjects(pick)[0];if(h)showZone(h.object.userData.zone,h.object.userData.shop)});
-function showZone(z,s){const p=$('#panel');const l=S.filter(x=>x.z===z);p.innerHTML=`<div style="display:flex;justify-content:space-between"><b>${ZN[z]}（${l.length} 家）</b><span onclick="this.parentNode.parentNode.style.display='none'" style="font-size:18px;cursor:pointer">✕</span></div>`+(s?`<div style="color:#e5484d;margin:4px 0">點到：${s.n}｜${s.j}｜區畫 ${s.k}</div>`:'')+l.map(x=>`<div onclick="flyShop('${x.n.replace(/'/g,"\\'")}')" style="padding:3px 0;border-bottom:1px solid #eee">${x.n} <small style="color:#789">${x.j}</small></div>`).join('');p.style.display='block'}
-const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
-(function loop(now){requestAnimationFrame(loop);if(fly){const t=Math.min(1,(now-fly.t0)/1200),e=ease(t);cam.position.lerpVectors(fly.fp,fly.tp,e);ctl.target.lerpVectors(fly.ft,fly.tt,e);if(t>=1)fly=null}
- ctl.update();R.render(sc,cam);if(hl&&tag.style.display==='block'){const v=hl.m.position.clone();v.y+=8;v.project(cam);tag.style.left=(v.x+1)/2*cv.clientWidth+'px';tag.style.top=(1-v.y)/2*cv.clientHeight+'px'}})();
+cv.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;const r=cv.getBoundingClientRect();mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,cam);
+ const h=ray.intersectObjects([walls,roofs,awns,signs])[0];if(!h)return;const i=h.object===signs?Math.floor(h.faceIndex/2):h.instanceId;if(i==null)return;const s=stall[i];highlight(s.n);showShop(s)});
+function showShop(s,extra){const p=$('#panel');const g=s.g.map(x=>`<span style="background:${CC[x]};color:#fff;border-radius:8px;padding:1px 6px;margin-right:3px">${CN[x]}</span>`).join('');
+ p.innerHTML=`<div style="display:flex;justify-content:space-between;gap:6px"><b>${s.n}</b><span onclick="this.parentNode.parentNode.style.display='none'" style="font-size:18px;cursor:pointer">✕</span></div><div style="color:#567">${s.j}</div>
+ <div style="margin:5px 0">${g}</div><div>區域：${ZN[s.z]}・區畫編號 <b>${s.k}</b></div>${s.c.length?`<div style="color:#789">官網標籤：${s.c.join('/')}</div>`:''}${extra?`<div style="color:#0a5fae;margin-top:4px">${extra}</div>`:''}
+ <button class="btn" style="margin-top:6px" onclick="addItem('${s.n.replace(/'/g,"\\'")}（${ZN[s.z]}・${s.k}）')">＋ 加入購物清單</button>
+ <div style="font-size:10px;color:#a07000;margin-top:4px">示意圖，實際位置以官網樓層圖為準</div>`;p.style.display='block'}
+// ---- 步行視角 ----
+const WALK=['W','E','H'];let wz=0,wt=0,wdir=1;const wb=$('#walkBtn'),wbar=$('#walkBar');
+function stopWalk(){if(!walking)return;walking=false;ctl.enabled=true;wbar.style.display='none';wb.textContent='🚶 步行視角';}
+window.toggleWalk=()=>{if(walking){stopWalk();cam.position.set(40,150,230);ctl.target.set(0,0,10);return}walking=true;ctl.enabled=false;wbar.style.display='flex';wb.textContent='🛸 鳥瞰';wt=0;wz=0;glow.visible&&0;$('#walkZone').textContent=ZN[WALK[wz]]};
+window.walkZone=()=>{wz=(wz+1)%3;wt=0;$('#walkZone').textContent=ZN[WALK[wz]]};
+let wspd=0;window.walkSpeed=v=>{wspd=v};let look=0;window.walkLook=v=>{look=v};
+cv.addEventListener('pointermove',e=>{if(walking&&e.buttons)look-=e.movementX*.005});
+// ---- loop ----
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;let last=performance.now();
+(function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;
+ if(walking){const cu=curves[WALK[wz]];const L=cu.getLength();wt=Math.min(1,Math.max(0,wt+wspd*dt*6/L));const p=cu.getPointAt(wt),tn=cu.getTangentAt(wt);if(wspd<0)tn.negate();
+  const dir=tn.clone().applyAxisAngle(new THREE.Vector3(0,1,0),look);cam.position.set(p.x,p.y+1.7,p.z);cam.lookAt(p.x+dir.x*10,p.y+2.2,p.z+dir.z*10);if(wspd===0&&wt>=1)wt=1}
+ else{if(fly){const t=Math.min(1,(now-fly.t0)/1200),e=ease(t);cam.position.lerpVectors(fly.fp,fly.tp,e);ctl.target.lerpVectors(fly.ft,fly.tt,e);if(t>=1)fly=null}ctl.update()}
+ const dist=walking?0:cam.position.distanceTo(ctl.target);signs.visible=dist<190;ICONS.forEach(i=>i.visible=!walking);LABELS.forEach(i=>i.visible=!walking);const pulse=.75+.25*Math.sin(now*.008);halo.material.opacity=pulse;glowMat.color.setScalar(1+.6*pulse);
+ R.render(sc,cam);
+ if(hlI>=0&&tag.style.display==='block'){const v=glow.position.clone();v.y+=1.5;v.project(cam);tag.style.left=(v.x+1)/2*cv.clientWidth+'px';tag.style.top=(1-v.y)/2*cv.clientHeight+'px';tag.style.visibility=v.z<1?'visible':'hidden'}})(performance.now());
+window.__dbg={cam,ctl,flyShop:window.flyShop};
+
 window.__ok3d=true;
 // ---- tabs ----
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,section').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('#'+b.dataset.t).classList.add('on')});
